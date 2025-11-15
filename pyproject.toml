@@ -1,6 +1,6 @@
 [project]
 name = "rapid-street-assessment-rool"
-version = "0.1.0"
+version = "0.1.1"
 description = "Rapid Street Assessments (RSAs) are designed to quickly retrieve comprehensive information about streets and the surrounding area."
 readme = "README.md"
 requires-python = ">=3.11"

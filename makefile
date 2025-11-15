@@ -1,7 +1,5 @@
-# Get the current date
 DATE := $(shell date +%Y-%m-%d)
 
-# Import commit types from existing configuration
 define COMMIT_TYPES
 feat:     A new feature
 fix:      A bug fix

@@ -1,99 +1,126 @@
-from robyn import Robyn, Request, Response
-from robyn.logger import Logger
-from robyn_lib.routes.route_handler import FeatureRouteHandler
+from fastapi import FastAPI, Request
+from fastapi.responses import JSONResponse
 from datetime import datetime
-from robyn_lib.services.services import OSFeatureService, DataService, LangChainSummaryService
+import logging
+import time
+from contextlib import asynccontextmanager
 
-# TODO improve error handling
+from api.routes.route_handler import router
 
-# DEFINE APP AND LOGGER
-app = Robyn(__file__)
-logger = Logger()
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+)
+logger = logging.getLogger(__name__)
+
 
 def get_log_level_for_status(status_code: int) -> str:
     """Determine the appropriate log level based on status code"""
-    match status_code:
-        case _ if status_code >= 500:
-            return "error"
-        case _ if status_code >= 400:
-            return "warning"
-        case _:
-            return "info"
+    if status_code >= 500:
+        return "error"
+    elif status_code >= 400:
+        return "warning"
+    else:
+        return "info"
 
-@app.before_request()
-async def log_request(request: Request):
-    """Log requests made"""
-    logger.info(f"Request: method={request.method} params={request.query_params}, path={request.url.path}, params={request.body}, ip_address={request.ip_addr}, time={datetime.now()}")
-    return request
 
-@app.after_request()
-async def log_response(response: Response):
-    """Log responses - success status only for successful requests, full details for errors"""
-    if response.status_code >= 400:  # Log full details for errors
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan handler for startup and shutdown events
+    """
+    # Startup
+    logger.info("Starting up Rapid Street Assessment API")
+    yield
+    # Shutdown
+    logger.info("Shutting down Rapid Street Assessment API")
+
+
+# Initialse FastAPI application
+app = FastAPI(
+    title="Rapid Street Assessment API",
+    description="Rapid Street Assessments (RSAs) are designed to quickly retrieve comprehensive information about streets and the surrounding area.",
+    version="0.1.0",
+    lifespan=lifespan,
+)
+
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """
+    Middleware to log all requests and responses
+    """
+    # Log request
+    start_time = time.time()
+    logger.info(
+        f"Request: method={request.method}, "
+        f"path={request.url.path}, "
+        f"query_params={dict(request.query_params)}, "
+        f"client={request.client.host if request.client else 'unknown'}, "
+        f"time={datetime.now()}"
+    )
+
+    # Process request
+    try:
+        response = await call_next(request)
+
+        # Calculate request duration
+        duration = time.time() - start_time
+
+        # Log response based on status code
         log_level = get_log_level_for_status(response.status_code)
-        
-        error_detail = response.description if hasattr(response, 'description') else ''
-
-        log_message = f"Response: status={response.status_code}, type={response.response_type}, details={error_detail}"
+        log_message = (
+            f"Response: status={response.status_code}, duration={duration:.3f}s"
+        )
 
         if log_level == "error":
             logger.error(log_message)
+        elif log_level == "warning":
+            logger.warning(log_message)
         else:
-            logger.warn(log_message)
-    else:  # Just log status for successful requests
-        logger.info(f"Response: status={response.status_code}, type={response.response_type}")
+            logger.info(log_message)
 
-    return response
+        return response
 
-# DEFINE ROUTES
-# Initialise dependencies
-feature_service = OSFeatureService()
-data_service = DataService()
-llm_summary_service = LangChainSummaryService()
+    except Exception as e:
+        duration = time.time() - start_time
+        logger.error(f"Request failed: {str(e)}, duration={duration:.3f}s")
+        return JSONResponse(
+            status_code=500, content={"detail": "Internal server error"}
+        )
 
-# Initialise route handler
-route_handler = FeatureRouteHandler(
-    feature_service=feature_service,
-    geometry_service=data_service,
-    street_manager_service=data_service,
-    llm_summary_service=llm_summary_service
+
+# Include router
+app.include_router(
+    router,
+    responses={
+        400: {"description": "Bad Request - Missing or invalid parameters"},
+        500: {"description": "Internal Server Error"},
+    },
 )
 
-# Define endpoints
-@app.get("/street-info")
-async def street_info_route(request):
-    """
-    Summary of network and RAMI data as well as street manager stats
-    """
-    return await route_handler.get_street_info_route(request)
 
-@app.get("/street-info-llm")
-async def street_info_llm_route(request):
+@app.get("/", tags=["Health"])
+async def root():
     """
-    Summary of network and RAMI data as well as street manager stats + llm summary of all data
+    Root endpoint - API health check
     """
-    return await route_handler.get_street_info_route_llm(request)
+    return {
+        "status": "healthy",
+        "message": "Rapid Street Assessment API is running",
+        "version": "0.1.0",
+    }
 
-@app.get("/land-use-info")
-async def land_use_route(request):
-    """
-    Summary of Land use and building information
-    """
-    return await route_handler.get_land_use_route(request)
 
-@app.get("/land-use-info-llm")
-async def land_use_llm_route(request):
+@app.get("/health", tags=["Health"])
+async def health_check():
     """
-    Summary of Land use and building information + llm summary of all data
+    Health check endpoint
     """
-    return await route_handler.get_land_use_route_llm(request)
+    return {"status": "healthy"}
 
-@app.get("/collaborative-street-works")
-async def collaborative_street_works_route(request):
-    """
-    Collaborative street works recommendation
-    """
-    return await route_handler.get_collaborative_street_works_route(request)
 
 if __name__ == "__main__":
-    app.start(host="0.0.0.0", port=8080)
+    import uvicorn
+
+    uvicorn.run("app:app", host="0.0.0.0", port=8080, reload=True, log_level="info")

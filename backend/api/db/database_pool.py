@@ -5,26 +5,29 @@ from loguru import logger
 import os
 from contextlib import asynccontextmanager
 
+
 class MotherDuckPool:
     """A simple connection pool for MotherDuck with a maximum of 5 connections"""
-    _instance: Optional['MotherDuckPool'] = None
-    
+
+    _instance: Optional["MotherDuckPool"] = None
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
     def __init__(self) -> None:
-        if not hasattr(self, 'initialized'):
-            self.database = os.getenv('MD_DB')
-            self.token = os.getenv('MD_TOKEN')
-            
+        if not hasattr(self, "initialized"):
+            self.database = os.getenv("MOTHERDUCK_DB")
+            self.token = os.getenv("MOTHERDUCK_TOKEN")
+
             if not all([self.database, self.token]):
                 raise ValueError("MotherDuck environment variables are not present")
-                
-            self.connection_string = f'md:{self.database}?motherduck_token={self.token}&access_mode=read_only'
+
+            self.connection_string = f"md:{self.database}?motherduck_token={self.token}&access_mode=read_only"
             self._connections: List[duckdb.DuckDBPyConnection] = []
             self._max_connections = 5
+            self._total_connections = 0
             self._lock = asyncio.Lock()
             self.initialized = True
 
@@ -32,7 +35,10 @@ class MotherDuckPool:
         """Create a new MotherDuck connection"""
         try:
             conn = await asyncio.to_thread(duckdb.connect, self.connection_string)
-            logger.debug("Created new MotherDuck connection")
+            self._total_connections += 1
+            logger.debug(
+                f"Created new MotherDuck connection (total: {self._total_connections})"
+            )
             return conn
         except Exception as e:
             logger.error(f"Failed to create connection: {e}")
@@ -44,28 +50,36 @@ class MotherDuckPool:
         async with self._lock:
             if self._connections:
                 connection = self._connections.pop()
-                logger.debug("Reusing existing connection")
-            elif len(self._connections) < self._max_connections:
+                logger.debug(
+                    f"Reusing existing connection (pool: {len(self._connections)}, total: {self._total_connections})"
+                )
+            elif self._total_connections < self._max_connections:
                 connection = await self._create_connection()
             else:
-                logger.warning("Max connections reached, waiting...")
+                logger.warning(
+                    f"Max connections ({self._max_connections}) reached, waiting for available connection..."
+                )
                 while not self._connections:
                     await asyncio.sleep(0.2)
                 connection = self._connections.pop()
+                logger.debug("Connection became available")
 
         try:
             # Verify connection is still valid
             await asyncio.to_thread(connection.execute, "SELECT 1")
             yield connection
-            
+
             # Return connection to pool
             async with self._lock:
                 self._connections.append(connection)
                 logger.debug("Returned connection to pool")
-                
+
         except Exception as e:
             logger.error(f"Connection error: {e}")
             await asyncio.to_thread(connection.close)
+            async with self._lock:
+                self._total_connections -= 1
+            logger.debug(f"Closed failed connection (total: {self._total_connections})")
             raise
 
     async def close_all(self):
@@ -74,4 +88,5 @@ class MotherDuckPool:
             while self._connections:
                 conn = self._connections.pop()
                 await asyncio.to_thread(conn.close)
+            self._total_connections = 0
             logger.info("Closed all connections in pool")

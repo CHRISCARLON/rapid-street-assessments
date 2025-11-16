@@ -3,67 +3,129 @@ from typing import Dict, Any
 
 async def langchain_pre_process_street_info(data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    Simplifies street information data by removing redundant info.
+    Simplifies street information data by removing redundant info and extracting roadlink details.
 
     Args:
         data: Raw street information data dictionary
 
     Returns:
-        Dict containing simplified street data
+        Dict containing simplified street data including roadlinks
     """
 
     # Extract common street information from first feature
     if not data.get("features"):
         return data
 
+    # Find the street feature (should be first, but let's be safe)
+    street_feature = None
+    for feature in data["features"]:
+        if feature["properties"].get("usrn"):
+            street_feature = feature
+            break
+
+    if not street_feature:
+        return data
+
     base_street = {
-        "usrn": data["features"][0]["properties"]["usrn"],
-        "street_name": data["features"][0]["properties"]["designatedname1_text"],
-        "town": data["features"][0]["properties"]["townname1_text"],
+        "usrn": street_feature["properties"]["usrn"],
+        "street_name": street_feature["properties"].get("designatedname1_text"),
+        "town": street_feature["properties"].get("townname1_text"),
         "authority": {
-            "name": data["features"][0]["properties"]["responsibleauthority_name"],
-            "area": data["features"][0]["properties"]["administrativearea1_text"],
+            "name": street_feature["properties"].get("responsibleauthority_name"),
+            "area": street_feature["properties"].get("administrativearea1_text"),
         },
-        "geometry": {"length": data["features"][0]["properties"]["geometry_length"]},
-        "operational_state": data["features"][0]["properties"]["operationalstate"],
-        "operational_state_date": data["features"][0]["properties"][
-            "operationalstatedate"
-        ],
+        "geometry": {"length": street_feature["properties"].get("geometry_length")},
+        "operational_state": street_feature["properties"].get("operationalstate"),
+        "operational_state_date": street_feature["properties"].get("operationalstatedate"),
     }
 
-    # Simplify features
-    simplified_features = []
+    # Separate features by type
+    simplified_designations = []
+    simplified_roadlinks = []
+
     for feature in data["features"]:
         props = feature["properties"]
+
+        # Identify feature type based on properties
+        # Roadlinks have 'osid' or 'toid' and roadclassification
+        is_roadlink = "osid" in props or ("toid" in props and "roadclassification" in props)
 
         # Skip the base street feature
         if props.get("description") == "Designated Street Name":
             continue
 
-        simplified_feature = {
-            "type": props.get("description"),
-            "designation": props.get("designation"),
-            "timeframe": props.get("timeinterval"),
-            "location": props.get("locationdescription"),
-            "details": props.get("designationdescription"),
-            "effective_date": props.get("effectivestartdate"),
-            "end_date": props.get("effectiveenddate"),
-        }
+        if is_roadlink:
+            # Extract roadlink information
+            roadlink = {
+                "id": props.get("osid"),
+                "name": props.get("name1_text"),
+                "description": props.get("description"),
+                "classification": {
+                    "type": props.get("roadclassification"),
+                    "number": props.get("roadclassificationnumber"),
+                    "hierarchy": props.get("routehierarchy"),
+                },
+                "physical": {
+                    "length_m": props.get("geometry_length_m"),
+                    "width_avg_m": props.get("roadwidth_average"),
+                    "width_min_m": props.get("roadwidth_minimum"),
+                },
+                "directionality": props.get("directionality"),
+                "operational_state": props.get("operationalstate"),
+                "infrastructure": {
+                    "pavement_left_m": props.get("presenceofpavement_left_m"),
+                    "pavement_right_m": props.get("presenceofpavement_right_m"),
+                    "pavement_coverage_pct": props.get("presenceofpavement_overallpercentage"),
+                    "cycle_lane_m": props.get("presenceofcyclelane_overall_m"),
+                    "cycle_lane_coverage_pct": props.get("presenceofcyclelane_overallpercentage"),
+                    "bus_lane_m": props.get("presenceofbuslane_overall_m"),
+                    "bus_lane_coverage_pct": props.get("presenceofbuslane_overallpercentage"),
+                    "street_lighting": props.get("presenceofstreetlight_coverage"),
+                },
+            }
 
-        # Only include non-None values
-        simplified_feature = {
-            k: v for k, v in simplified_feature.items() if v is not None
-        }
-        simplified_features.append(simplified_feature)
+            # Remove None values
+            roadlink = {k: v for k, v in roadlink.items() if v is not None}
+            if "physical" in roadlink:
+                roadlink["physical"] = {k: v for k, v in roadlink["physical"].items() if v is not None}
+            if "infrastructure" in roadlink:
+                roadlink["infrastructure"] = {k: v for k, v in roadlink["infrastructure"].items() if v is not None}
+            if "classification" in roadlink:
+                roadlink["classification"] = {k: v for k, v in roadlink["classification"].items() if v is not None}
 
-    return {
+            simplified_roadlinks.append(roadlink)
+        else:
+            # Handle designation features (RAMI data)
+            simplified_feature = {
+                "type": props.get("description"),
+                "designation": props.get("designation"),
+                "timeframe": props.get("timeinterval"),
+                "location": props.get("locationdescription"),
+                "details": props.get("designationdescription"),
+                "effective_date": props.get("effectivestartdate"),
+                "end_date": props.get("effectiveenddate"),
+            }
+
+            # Only include non-None values
+            simplified_feature = {
+                k: v for k, v in simplified_feature.items() if v is not None
+            }
+            simplified_designations.append(simplified_feature)
+
+    result = {
         "street": base_street,
-        "designations": simplified_features,
+        "designations": simplified_designations,
         "metadata": {
             "timestamp": data.get("timeStamp"),
             "number_returned": data.get("numberReturned"),
         },
     }
+
+    # Only include roadlinks if we found any
+    if simplified_roadlinks:
+        result["roadlinks"] = simplified_roadlinks
+
+    return result
 
 
 async def langchain_pre_process_land_use_info(data: dict) -> dict:

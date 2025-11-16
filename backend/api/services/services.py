@@ -10,6 +10,10 @@ from typing import Dict, Any, Optional
 
 
 class OSFeatureService(OSFeatures):
+    """Create OS Service.
+
+    This interacts with the OS NGD
+    """
     async def get_features(
         self,
         path_type: str,
@@ -18,8 +22,13 @@ class OSFeatureService(OSFeatures):
         bbox_crs: Optional[str] = None,
         crs: Optional[str] = None,
     ) -> Dict[str, Any]:
-        if usrn is None or bbox is None or bbox_crs is None or crs is None:
-            raise ValueError("All parameters must be provided")
+        # Validate required parameters based on route type
+        if usrn is None or len(usrn) > 8:
+            raise ValueError("USRN is either not present or too long")
+
+        # For land-use route, bbox is also required
+        if path_type == "land-use" and bbox is None:
+            raise ValueError("BBOX is required for land-use route")
 
         return await process_single_collection(
             path_type=path_type, usrn=usrn, bbox=bbox, bbox_crs=bbox_crs, crs=crs

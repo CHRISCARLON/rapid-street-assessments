@@ -17,7 +17,7 @@ class MotherDuckPool:
         return cls._instance
 
     def __init__(self) -> None:
-        if not hasattr(self, "initialized"):
+        if not hasattr(self, "initialised"):
             self.database = os.getenv("MOTHERDUCK_DB")
             self.token = os.getenv("MOTHERDUCK_TOKEN")
 
@@ -29,7 +29,7 @@ class MotherDuckPool:
             self._max_connections = 5
             self._total_connections = 0
             self._lock = asyncio.Lock()
-            self.initialized = True
+            self.initialised = True
 
     async def _create_connection(self) -> duckdb.DuckDBPyConnection:
         """Create a new MotherDuck connection"""

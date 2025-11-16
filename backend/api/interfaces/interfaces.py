@@ -1,17 +1,23 @@
 from abc import ABC, abstractmethod
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 
 class OSFeatures(ABC):
     """
     Abstract base class for OS features
 
-    This class is used to get the features of a given path type, usrn, bbox, bbox_crs, and crs.
+    This class is used to get the features of a given path type and usrn.
+    For land-use routes, bbox is also required. bbox_crs and crs are optional.
     """
 
     @abstractmethod
     async def get_features(
-        self, path_type: str, usrn: str, bbox: str, bbox_crs: str, crs: str
+        self,
+        path_type: str,
+        usrn: Optional[str] = None,
+        bbox: Optional[str] = None,
+        bbox_crs: Optional[str] = None,
+        crs: Optional[str] = None,
     ) -> Dict[str, Any]:
         pass
 

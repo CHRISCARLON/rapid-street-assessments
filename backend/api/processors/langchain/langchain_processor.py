@@ -9,54 +9,54 @@ from ...types import RouteType
 
 
 class StreetAnalysis(BaseModel):
-    """Structured output for helping anxious drivers navigate streets safely"""
+    """Structured output for comprehensive street information and assessment"""
 
     location: List[str] = Field(
-        description="Street name, area, and key landmarks to help the driver know where they are"
+        description="Street name, town/area, administrative authority, and identifying information (USRN, classification numbers)"
     )
     road_characteristics: List[str] = Field(
-        description="Road layout, number of lanes, road surface condition, width, and general characteristics"
+        description="Detailed road physical characteristics: type (slip road, roundabout, etc.), classification, hierarchy, width measurements, length, directionality, surface conditions, and operational state"
     )
-    speed_and_traffic: List[str] = Field(
-        description="Speed limits, typical traffic flow, busy times, and what to expect in terms of traffic volume"
+    infrastructure: List[str] = Field(
+        description="Infrastructure details: pavement presence and coverage, cycle lane presence and coverage, bus lane presence and coverage, street lighting coverage, and any infrastructure measurements"
     )
-    hazards_to_watch_for: List[str] = Field(
-        description="Potential hazards including construction zones, narrow sections, blind corners, pedestrian crossings, cyclists, or obstacles to be aware of"
+    restrictions_and_designations: List[str] = Field(
+        description="All special designations, restrictions, regulations, and RAMI data: construction zones, parking restrictions, access restrictions, time-based rules, traffic orders, and special designation areas/lines/points with effective dates"
     )
-    restrictions_and_rules: List[str] = Field(
-        description="Special restrictions like one-way streets, no-turn signs, parking restrictions, bus lanes, or time-based rules"
+    traffic_management: List[str] = Field(
+        description="Traffic flow characteristics: speed limits, directionality, route hierarchy, trunk road status, primary route designation, and traffic management features"
     )
-    driving_tips: List[str] = Field(
-        description="Specific, reassuring tips for driving safely on this street - what speed to maintain, when to be extra cautious, where to position your vehicle"
+    assessment_notes: List[str] = Field(
+        description="Key observations, notable features, potential concerns, maintenance requirements, or important details for street assessment purposes"
     )
     summary: str = Field(
-        description="A calm, reassuring summary that helps the anxious driver feel prepared and confident about driving on this street"
+        description="Comprehensive summary of all street information including road classification, physical characteristics, infrastructure, and any restrictions or designations"
     )
 
 
 class LandUseAnalysis(BaseModel):
-    """Structured output for area context to help anxious drivers understand their surroundings"""
+    """Structured output for comprehensive land use and area assessment"""
 
     location: List[str] = Field(
-        description="Area name, major landmarks, and notable buildings to help the driver orient themselves"
+        description="Area identification: street name, town, administrative area, and geographic context"
     )
-    area_type: List[str] = Field(
-        description="Type of area (residential, commercial, mixed-use, industrial) and what kind of activity to expect"
+    land_use_classification: List[str] = Field(
+        description="Detailed land use classifications: OS Land Use Tier A (primary classification), Tier B subtypes, property types, and area categorizations (residential, commercial, industrial, mixed-use, etc.)"
     )
-    parking_information: List[str] = Field(
-        description="Parking options, restrictions, parking garages, street parking availability, and any parking-related tips"
+    properties_and_sites: List[str] = Field(
+        description="All properties and sites identified: names, descriptions, areas (in square meters), addresses, and specific property details"
     )
-    nearby_destinations: List[str] = Field(
-        description="Notable destinations, businesses, public buildings, and services in the area that the driver might be looking for"
+    area_statistics: List[str] = Field(
+        description="Statistical summary: total area coverage, number of properties, breakdown by land use type, average property sizes, and density information"
     )
-    pedestrian_activity: List[str] = Field(
-        description="Information about pedestrian crossings, schools, busy shopping areas, or high foot-traffic zones where extra caution is needed"
+    notable_features: List[str] = Field(
+        description="Landmarks, distinctive buildings, public facilities, educational institutions, religious buildings, monuments, and other significant features"
     )
-    navigation_landmarks: List[str] = Field(
-        description="Distinctive buildings, monuments, or features that can help with navigation and orientation while driving"
+    contextual_information: List[str] = Field(
+        description="Additional context about the area: development status, change types (new, modified, demolished), version dates, and temporal information"
     )
     summary: str = Field(
-        description="A reassuring summary of the area to help the driver understand their surroundings and feel more confident"
+        description="Comprehensive summary of land use patterns, property distribution, area characteristics, and key features of the assessed area"
     )
 
 
@@ -90,29 +90,51 @@ async def process_with_langchain(
     # Select appropriate parser and template based on the route type
     match route_type:
         case RouteType.STREET_INFO.value:
-            logger.info("Processing comprehensive street information for driver")
+            logger.info("Processing comprehensive street information and assessment")
             prompt = ChatPromptTemplate.from_messages(
                 [
                     (
                         "system",
-                        """You are a comprehensive street information system providing detailed awareness of everything on this street.
+                        """You are a street assessment and analysis system providing comprehensive information about street infrastructure and characteristics.
 
-Your role is to provide COMPLETE and DETAILED information about:
-- Every characteristic of the road (exact layout, all lane details, surface conditions, width measurements)
-- All speed limits, traffic patterns, and flow information
-- Every single hazard, obstacle, restriction, or special designation on this street
-- All pedestrian crossings, signals, signs, and road markings
-- Every turn restriction, parking rule, bus lane, and traffic regulation
-- All construction zones, roadworks, and temporary restrictions
-- Specific locations of everything mentioned (use exact street positions when available)
+Analyze and report ALL available information including:
 
-Be COMPREHENSIVE and THOROUGH. Include ALL details from the data - don't summarize or leave things out. The driver needs to be aware of EVERYTHING on this street. Provide specific locations, names, and details for every feature, restriction, and hazard.
+LOCATION & IDENTIFICATION:
+- Street name, USRN, town, administrative authority
+- Road classification and hierarchy.
+- Classification numbers.
 
-Do not focus on being brief or reassuring - focus on being complete and informative. List everything.""",
+ROAD CHARACTERISTICS:
+- Road type and description (slip road, roundabout, main carriageway, etc.)
+- Physical measurements: length, width (average and minimum), elevation
+- Directionality and operational state
+- Route hierarchy and trunk road status
+
+INFRASTRUCTURE:
+- Pavement: presence, coverage percentage, width measurements (left/right)
+- Cycle lanes: presence, length, coverage percentage, segregation details
+- Bus lanes: presence, length, coverage percentage
+- Street lighting: coverage level (well-lit, mostly unlit, etc.)
+- Include specific measurements in meters and percentages
+
+RESTRICTIONS & DESIGNATIONS:
+- All RAMI special designations (areas, lines, points)
+- Traffic restrictions, parking restrictions, access controls
+- Construction zones, roadworks, temporary traffic orders
+- Effective dates and timeframes for restrictions
+- Location descriptions for restrictions
+
+TRAFFIC MANAGEMENT:
+- Speed limits
+- Traffic flow patterns
+- Turn restrictions
+- Time-based regulations
+
+Be EXHAUSTIVE and PRECISE. Report every roadlink with its full details. Include all measurements, percentages, and specific values. List everything found in the data.""",
                     ),
                     (
                         "user",
-                        "Analyze this street data and provide COMPLETE information about everything on this street:\n\n{context}",
+                        "Analyze this street data and provide a comprehensive assessment with all available information:\n\n{context}",
                     ),
                 ]
             )
@@ -120,30 +142,60 @@ Do not focus on being brief or reassuring - focus on being complete and informat
             chain = prompt | structured_llm
 
         case RouteType.LAND_USE.value:
-            logger.info("Processing comprehensive area information for driver")
+            logger.info("Processing comprehensive land use and area assessment")
             prompt = ChatPromptTemplate.from_messages(
                 [
                     (
                         "system",
-                        """You are a comprehensive area information system providing detailed awareness of everything surrounding this street.
+                        """You are a land use assessment and analysis system providing comprehensive information about properties, buildings, and area characteristics.
 
-Your role is to provide COMPLETE and DETAILED information about:
-- Every building, property, and structure in the area (with names and specific locations)
-- All businesses, shops, services, and public facilities
-- All parking facilities, restrictions, zones, and regulations in detail
-- Every landmark, monument, and distinctive feature
-- All areas with pedestrian activity, crossings, and foot traffic zones
-- Complete characterization of the area type and what activity to expect
-- All educational institutions, religious buildings, and public spaces
-- Specific addresses and locations when available
+Analyze and report ALL available information including:
 
-Be COMPREHENSIVE and THOROUGH. Include ALL properties, buildings, and features from the data - don't summarize or leave things out. The driver needs to know about EVERYTHING in this area. List all building names, business names, and specific details.
+LOCATION & CONTEXT:
+- Street name, town, administrative area
+- Geographic and administrative boundaries
+- Version dates and temporal information
 
-Do not focus on being brief - focus on being complete and informative. Enumerate everything.""",
+LAND USE CLASSIFICATION:
+- OS Land Use Tier A (primary classification)
+- OS Land Use Tier B subtypes
+- Detailed property type categorizations
+- Classification codes and descriptions
+
+PROPERTIES & SITES:
+- Every property and site with complete details:
+  * Property names (primary and secondary)
+  * Descriptions and types
+  * Area measurements (in square meters)
+  * Addresses when available
+  * Change types (new, modified, demolished, etc.)
+
+AREA STATISTICS:
+- Total area coverage in square meters
+- Total number of properties
+- Breakdown by land use type (residential, commercial, industrial, etc.)
+- Property density information
+- Average property sizes
+- Residential vs commercial vs other ratios
+
+NOTABLE FEATURES:
+- Landmarks and monuments
+- Public facilities and services
+- Educational institutions
+- Religious buildings
+- Distinctive architectural features
+- Parks and public spaces
+
+DEVELOPMENT INFORMATION:
+- Change status and types
+- Version dates and currency of data
+- Development patterns and trends
+
+Be EXHAUSTIVE and DETAILED. List every property with its full details including exact area measurements. Provide complete statistical breakdowns. Include all names, descriptions, and quantitative data.""",
                     ),
                     (
                         "user",
-                        "Analyze this area data and provide COMPLETE information about everything in this area:\n\n{context}",
+                        "Analyze this land use data and provide a comprehensive assessment with all available information:\n\n{context}",
                     ),
                 ]
             )

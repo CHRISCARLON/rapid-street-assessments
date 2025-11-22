@@ -1,8 +1,11 @@
 import asyncio
 from typing import Dict, Any, Optional, List
-from loguru import logger
+
+from logging_config import get_logger
 from os_lib.os_data_object import OSDataObject
 from ...types import RouteType
+
+logger = get_logger(__name__)
 
 
 async def process_single_collection(
@@ -42,7 +45,7 @@ async def process_single_collection(
         # Define collection IDs based on path type
         match route_type:
             case RouteType.STREET_INFO:
-                logger.info(f"Processing street info for USRN: {usrn}")
+                logger.debug(f"Processing street info collections for USRN: {usrn}")
                 collection_ids = [
                     "trn-ntwk-street-1",
                     "trn-rami-specialdesignationarea-1",
@@ -62,7 +65,7 @@ async def process_single_collection(
 
             # TODO: Add building collection back in the future?
             case RouteType.LAND_USE:
-                logger.info(f"Processing land use for USRN: {usrn}")
+                logger.debug(f"Processing land use collections for USRN: {usrn}")
                 collection_ids = [
                     # "bld-fts-building-1",
                     "lus-fts-site-1"
@@ -120,14 +123,19 @@ async def process_single_collection(
 
                 filtered_features.append(feature_copy)
 
-                if route_type == RouteType.STREET_INFO and collection_id == "trn-ntwk-street-1":
-                    roadlinkreference = feature.get("properties", {}).get("roadlinkreference", [])
+                if (
+                    route_type == RouteType.STREET_INFO
+                    and collection_id == "trn-ntwk-street-1"
+                ):
+                    roadlinkreference = feature.get("properties", {}).get(
+                        "roadlinkreference", []
+                    )
                     for ref in roadlinkreference:
                         if isinstance(ref, dict) and "roadlinkid" in ref:
                             roadlink_ids.append(ref["roadlinkid"])
 
-            logger.success(
-                f"Geometries removed from {collection_id}: {len(filtered_features)} features"
+            logger.debug(
+                f"Processed {collection_id}: {len(filtered_features)} features"
             )
             all_features.extend(filtered_features)
 
@@ -137,12 +145,11 @@ async def process_single_collection(
 
         # Fetch roadlink features if we found any roadlink IDs (STREET_INFO route only)
         if route_type == RouteType.STREET_INFO and roadlink_ids:
-            logger.info(f"Fetching {len(roadlink_ids)} roadlink features")
+            logger.debug(f"Fetching {len(roadlink_ids)} roadlink features")
 
             roadlink_coroutines = [
                 os_data.get_single_collection_feature(
-                    collection_id="trn-ntwk-roadlink-5",
-                    feature_id=roadlink_id
+                    collection_id="trn-ntwk-roadlink-5", feature_id=roadlink_id
                 )
                 for roadlink_id in roadlink_ids
             ]
@@ -155,7 +162,9 @@ async def process_single_collection(
             roadlink_count = 0
             for roadlink_id, roadlink_result in zip(roadlink_ids, roadlink_results):
                 if isinstance(roadlink_result, Exception):
-                    logger.error(f"Failed to fetch roadlink {roadlink_id}: {str(roadlink_result)}")
+                    logger.error(
+                        f"Failed to fetch roadlink {roadlink_id}: {str(roadlink_result)}"
+                    )
                     continue
 
                 if not isinstance(roadlink_result, dict):
@@ -163,7 +172,9 @@ async def process_single_collection(
                     continue
 
                 if "properties" not in roadlink_result:
-                    logger.warning(f"Roadlink {roadlink_id} has no properties - skipping")
+                    logger.warning(
+                        f"Roadlink {roadlink_id} has no properties - skipping"
+                    )
                     continue
 
                 # TODO: Need to remove the dot cotton from here too!
@@ -175,13 +186,18 @@ async def process_single_collection(
                     all_features.append(roadlink_feature)
                     roadlink_count += 1
                 else:
-                    logger.error(f"Properties lost for roadlink {roadlink_id} - not adding to LLM data")
+                    logger.error(
+                        f"Properties lost for roadlink {roadlink_id} - not adding to LLM data"
+                    )
 
                 if roadlink_result.get("timeStamp"):
-                    if latest_timestamp is None or roadlink_result["timeStamp"] > latest_timestamp:
+                    if (
+                        latest_timestamp is None
+                        or roadlink_result["timeStamp"] > latest_timestamp
+                    ):
                         latest_timestamp = roadlink_result["timeStamp"]
 
-            logger.success(f"Successfully added {roadlink_count} roadlink features with full attributes to LLM data")
+            logger.debug(f"Successfully added {roadlink_count} roadlink features")
 
         if not all_features:
             logger.warning(f"No features found for USRN: {usrn}")

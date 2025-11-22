@@ -14,6 +14,7 @@ class OSFeatureService(OSFeatures):
 
     This interacts with the OS NGD
     """
+
     async def get_features(
         self,
         path_type: str,

@@ -2,10 +2,13 @@ import json
 import os
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts import ChatPromptTemplate
-from loguru import logger
 from pydantic import BaseModel, Field, SecretStr
 from typing import Dict, Any, List, Union, cast
+
+from logging_config import get_logger
 from ...types import RouteType
+
+logger = get_logger(__name__)
 
 
 class StreetAnalysis(BaseModel):
@@ -90,7 +93,7 @@ async def process_with_langchain(
     # Select appropriate parser and template based on the route type
     match route_type:
         case RouteType.STREET_INFO.value:
-            logger.info("Processing comprehensive street information and assessment")
+            logger.debug("Processing comprehensive street information and assessment")
             prompt = ChatPromptTemplate.from_messages(
                 [
                     (
@@ -142,7 +145,7 @@ Be EXHAUSTIVE and PRECISE. Report every roadlink with its full details. Include 
             chain = prompt | structured_llm
 
         case RouteType.LAND_USE.value:
-            logger.info("Processing comprehensive land use and area assessment")
+            logger.debug("Processing comprehensive land use and area assessment")
             prompt = ChatPromptTemplate.from_messages(
                 [
                     (
@@ -207,7 +210,7 @@ Be EXHAUSTIVE and DETAILED. List every property with its full details including 
 
     try:
         response = await chain.ainvoke({"context": json.dumps(data, indent=2)})
-        logger.success("Langchain Parse Successful")
+        logger.debug("Langchain parsing successful")
 
         if isinstance(response, dict):
             llm_summary = response

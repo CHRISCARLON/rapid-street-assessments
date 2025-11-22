@@ -1,17 +1,21 @@
+import time
+import os
+
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from datetime import datetime
-import logging
-import time
 from contextlib import asynccontextmanager
-
 from api.routes.route_handler import router
+from logging_config import setup_logging, get_logger
+from metrics.metrics import PrometheusMiddleware, metrics_endpoint
+from metrics.security import MetricsSecurityMiddleware
 
-# Configure logging
-logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+enable_file_logging = os.getenv("ENABLE_FILE_LOGGING", "true").lower() == "true"
+log_level = os.getenv("LOG_LEVEL", "INFO")
+setup_logging(
+    log_level=log_level, log_dir="logs", enable_file_logging=enable_file_logging
 )
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 
 def get_log_level_for_status(status_code: int) -> str:
@@ -29,68 +33,78 @@ async def lifespan(app: FastAPI):
     """
     Application lifespan handler for startup and shutdown events
     """
-    # Startup
     logger.info("Starting up Rapid Street Assessment API")
     yield
-    # Shutdown
     logger.info("Shutting down Rapid Street Assessment API")
 
 
-# Initialse FastAPI application
 app = FastAPI(
     title="Rapid Street Assessment API",
     description="Rapid Street Assessments (RSAs) are designed to quickly retrieve comprehensive information about streets and the surrounding area.",
     version="0.1.0",
     lifespan=lifespan,
 )
+app.add_middleware(MetricsSecurityMiddleware)
 
+app.add_middleware(PrometheusMiddleware)
 
 @app.middleware("http")
+
 async def log_requests(request: Request, call_next):
     """
     Middleware to log all requests and responses
     """
-    # Log request
     start_time = time.time()
+    usrn = request.query_params.get("usrn", "N/A")
+
     logger.info(
-        f"Request: method={request.method}, "
+        f"Incoming request: method={request.method}, "
         f"path={request.url.path}, "
         f"query_params={dict(request.query_params)}, "
-        f"client={request.client.host if request.client else 'unknown'}, "
-        f"time={datetime.now()}"
+        f"client={request.client.host if request.client else 'unknown'}",
+        extra={"usrn": usrn},
     )
 
-    # Process request
     try:
         response = await call_next(request)
-
-        # Calculate request duration
         duration = time.time() - start_time
 
-        # Log response based on status code
         log_level = get_log_level_for_status(response.status_code)
         log_message = (
-            f"Response: status={response.status_code}, duration={duration:.3f}s"
+            f"Response completed: method={request.method}, "
+            f"path={request.url.path}, "
+            f"status={response.status_code}"
         )
 
+        extra_context = {
+            "status_code": response.status_code,
+            "duration": f"{duration:.3f}",
+            "usrn": usrn,
+        }
+
         if log_level == "error":
-            logger.error(log_message)
+            logger.error(log_message, extra=extra_context)
         elif log_level == "warning":
-            logger.warning(log_message)
+            logger.warning(log_message, extra=extra_context)
         else:
-            logger.info(log_message)
+            logger.info(log_message, extra=extra_context)
 
         return response
 
     except Exception as e:
         duration = time.time() - start_time
-        logger.error(f"Request failed: {str(e)}, duration={duration:.3f}s")
+        logger.error(
+            f"Request failed: method={request.method}, "
+            f"path={request.url.path}, "
+            f"error={str(e)}",
+            extra={"duration": f"{duration:.3f}", "usrn": usrn, "status_code": 500},
+            exc_info=True,
+        )
         return JSONResponse(
             status_code=500, content={"detail": "Internal server error"}
         )
 
 
-# Include router
 app.include_router(
     router,
     responses={
@@ -98,7 +112,6 @@ app.include_router(
         500: {"description": "Internal Server Error"},
     },
 )
-
 
 @app.get("/", tags=["Health"])
 async def root():
@@ -111,7 +124,6 @@ async def root():
         "version": "0.1.0",
     }
 
-
 @app.get("/health", tags=["Health"])
 async def health_check():
     """
@@ -119,8 +131,9 @@ async def health_check():
     """
     return {"status": "healthy"}
 
-
-if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run("app:app", host="0.0.0.0", port=8080, reload=True, log_level="info")
+@app.get("/metrics", tags=["Monitoring"], include_in_schema=False)
+async def metrics():
+    """
+    Prometheus metrics endpoint
+    """
+    return metrics_endpoint()

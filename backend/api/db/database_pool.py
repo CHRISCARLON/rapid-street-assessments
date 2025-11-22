@@ -1,9 +1,12 @@
 from typing import List, Optional, AsyncGenerator
 import asyncio
 import duckdb
-from loguru import logger
 import os
 from contextlib import asynccontextmanager
+
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 
 class MotherDuckPool:

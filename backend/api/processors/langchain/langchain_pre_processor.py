@@ -36,7 +36,9 @@ async def langchain_pre_process_street_info(data: Dict[str, Any]) -> Dict[str, A
         },
         "geometry": {"length": street_feature["properties"].get("geometry_length")},
         "operational_state": street_feature["properties"].get("operationalstate"),
-        "operational_state_date": street_feature["properties"].get("operationalstatedate"),
+        "operational_state_date": street_feature["properties"].get(
+            "operationalstatedate"
+        ),
     }
 
     # Separate features by type
@@ -48,7 +50,9 @@ async def langchain_pre_process_street_info(data: Dict[str, Any]) -> Dict[str, A
 
         # Identify feature type based on properties
         # Roadlinks have 'osid' or 'toid' and roadclassification
-        is_roadlink = "osid" in props or ("toid" in props and "roadclassification" in props)
+        is_roadlink = "osid" in props or (
+            "toid" in props and "roadclassification" in props
+        )
 
         # Skip the base street feature
         if props.get("description") == "Designated Street Name":
@@ -75,11 +79,17 @@ async def langchain_pre_process_street_info(data: Dict[str, Any]) -> Dict[str, A
                 "infrastructure": {
                     "pavement_left_m": props.get("presenceofpavement_left_m"),
                     "pavement_right_m": props.get("presenceofpavement_right_m"),
-                    "pavement_coverage_pct": props.get("presenceofpavement_overallpercentage"),
+                    "pavement_coverage_pct": props.get(
+                        "presenceofpavement_overallpercentage"
+                    ),
                     "cycle_lane_m": props.get("presenceofcyclelane_overall_m"),
-                    "cycle_lane_coverage_pct": props.get("presenceofcyclelane_overallpercentage"),
+                    "cycle_lane_coverage_pct": props.get(
+                        "presenceofcyclelane_overallpercentage"
+                    ),
                     "bus_lane_m": props.get("presenceofbuslane_overall_m"),
-                    "bus_lane_coverage_pct": props.get("presenceofbuslane_overallpercentage"),
+                    "bus_lane_coverage_pct": props.get(
+                        "presenceofbuslane_overallpercentage"
+                    ),
                     "street_lighting": props.get("presenceofstreetlight_coverage"),
                 },
             }
@@ -87,11 +97,17 @@ async def langchain_pre_process_street_info(data: Dict[str, Any]) -> Dict[str, A
             # Remove None values
             roadlink = {k: v for k, v in roadlink.items() if v is not None}
             if "physical" in roadlink:
-                roadlink["physical"] = {k: v for k, v in roadlink["physical"].items() if v is not None}
+                roadlink["physical"] = {
+                    k: v for k, v in roadlink["physical"].items() if v is not None
+                }
             if "infrastructure" in roadlink:
-                roadlink["infrastructure"] = {k: v for k, v in roadlink["infrastructure"].items() if v is not None}
+                roadlink["infrastructure"] = {
+                    k: v for k, v in roadlink["infrastructure"].items() if v is not None
+                }
             if "classification" in roadlink:
-                roadlink["classification"] = {k: v for k, v in roadlink["classification"].items() if v is not None}
+                roadlink["classification"] = {
+                    k: v for k, v in roadlink["classification"].items() if v is not None
+                }
 
             simplified_roadlinks.append(roadlink)
         else:

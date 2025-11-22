@@ -1,0 +1,57 @@
+# Git
+.git/
+.gitignore
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+ENV/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Cache
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# CI/CD
+.pre-commit-config.yaml
+
+# Tests
+tests/
+*.md
+
+# Logs
+logs/
+*.log
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Prometheus
+prometheus.yml
+
+# Misc
+TODO.md
+makefile

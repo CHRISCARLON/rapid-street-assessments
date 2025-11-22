@@ -1,15 +1,21 @@
 services:
   api:
     build:
-      context: ./backend
+      context: .
       dockerfile: Dockerfile
     container_name: rapid-street-assessment-api
     ports:
-      - "127.0.0.1:8080:8080"
+      - "127.0.0.1:8080:8000"
     env_file:
       - .env
+    environment:
+      - ENABLE_FILE_LOGGING=false # false = stdout only (recommended)
+      - LOG_LEVEL=INFO # DEBUG, INFO, WARNING, ERROR, CRITICAL
+      - PROMETHEUS_ALLOWED_IPS=127.0.0.1,172.19.0.0/16 # Allow localhost and Docker network
     volumes:
       - ./backend:/app
+      # Optional: Uncomment to persist logs on host (if ENABLE_FILE_LOGGING=true)
+      # - ./logs:/app/logs
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
@@ -17,3 +23,23 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: rapid-street-assessment-prometheus
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--web.console.libraries=/usr/share/prometheus/console_libraries"
+      - "--web.console.templates=/usr/share/prometheus/consoles"
+    restart: unless-stopped
+    depends_on:
+      - api
+
+volumes:
+  prometheus-data:

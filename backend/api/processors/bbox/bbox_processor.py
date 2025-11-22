@@ -1,8 +1,11 @@
 import os
 from shapely.wkt import loads
-from loguru import logger
 import asyncio
+
+from logging_config import get_logger
 from ...db.database_pool import MotherDuckPool
+
+logger = get_logger(__name__)
 
 
 async def get_bbox_from_usrn(usrn: str, buffer_distance: float = 50) -> tuple:
@@ -28,18 +31,16 @@ async def get_bbox_from_usrn(usrn: str, buffer_distance: float = 50) -> tuple:
             result = await asyncio.to_thread(con.execute, query, [usrn])
             df = result.fetchdf()
 
-            logger.debug(f"Query result shape: {df.shape}")
-            logger.success(f"USRN Geom Retrieval Successful: {df}")
-
             if df.empty:
                 logger.warning(f"No geometry found for USRN: {usrn}")
                 raise ValueError(f"No geometry found for USRN: {usrn}")
 
+            logger.debug(f"Query result shape: {df.shape}")
             geom = loads(df["geometry"].iloc[0])
             buffered = geom.buffer(
                 buffer_distance, cap_style="square", single_sided=False
             )
-            logger.success(f"Buffered geometry: {buffered}")
+            logger.debug(f"Successfully buffered geometry for USRN: {usrn}")
 
             return tuple(round(coord) for coord in buffered.bounds)
     except Exception as e:

@@ -57,6 +57,7 @@ cover/
 
 # Django stuff:
 *.log
+*.log.*
 local_settings.py
 db.sqlite3
 db.sqlite3-journal
@@ -167,6 +168,7 @@ ruff.toml
 creds.py
 .user.yml
 /logs
+/backend/logs
 /dbt/logs
 /dbt/target/
 /dbt/dbt_packages/
@@ -197,3 +199,4 @@ src/os_open_usrn_functions/explore_and_prep.py
 .test_venv
 settings.json*
 uv.lock
+/logs

@@ -1,7 +1,10 @@
 import os
 from typing import Literal, Optional
 from openai import AsyncOpenAI
-from loguru import logger
+
+from logging_config import get_logger
+
+logger = get_logger(__name__)
 
 # TODO: How do i make this faster?
 # TODO: Cache connection
@@ -52,8 +55,8 @@ async def convert_text_to_speech(
     try:
         client = AsyncOpenAI(api_key=api_key)
 
-        logger.info(
-            f"Converting text to speech with voice: {voice}, format: {response_format}"
+        logger.debug(
+            f"Converting text to speech: voice={voice}, format={response_format}, length={len(text)} chars"
         )
 
         if instructions:
@@ -71,8 +74,8 @@ async def convert_text_to_speech(
 
         audio_bytes = response.content
 
-        logger.success(
-            f"Successfully converted {len(text)} characters to audio ({len(audio_bytes)} bytes)"
+        logger.debug(
+            f"Text-to-speech completed: {len(text)} chars → {len(audio_bytes)} bytes"
         )
 
         return audio_bytes
